@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &1568372128634006117
+--- !u!1 &3851081190275318822
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,47 +8,47 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 3267413587718242478}
-  - component: {fileID: 4369580807322014244}
-  - component: {fileID: 3568473968183975108}
+  - component: {fileID: 9193131642024634610}
+  - component: {fileID: 6002544323870015929}
+  - component: {fileID: 2847653876878955943}
   m_Layer: 0
-  m_Name: frying_pan
+  m_Name: smiley
   m_TagString: Item
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &3267413587718242478
+--- !u!4 &9193131642024634610
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1568372128634006117}
+  m_GameObject: {fileID: 3851081190275318822}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.26541796, y: 0.80092937, z: -0.3220436, w: 0.42936394}
-  m_LocalPosition: {x: 0.53497875, y: 1.7611071, z: -3.9086952}
+  m_LocalRotation: {x: 0.16967973, y: 0.7658474, z: -0.2783641, w: 0.55425626}
+  m_LocalPosition: {x: 2.450015, y: 5.4683332, z: 3.1619956}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 7441352707652480332}
+  - {fileID: 3545520964171684964}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!33 &4369580807322014244
+--- !u!33 &6002544323870015929
 MeshFilter:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1568372128634006117}
-  m_Mesh: {fileID: -6749530754551045758, guid: ec146cd81fbf090459ce46713e58871d, type: 3}
---- !u!54 &3568473968183975108
+  m_GameObject: {fileID: 3851081190275318822}
+  m_Mesh: {fileID: 2332481779433421368, guid: a89df89efd190d849837de078bc6c4f9, type: 3}
+--- !u!54 &2847653876878955943
 Rigidbody:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1568372128634006117}
+  m_GameObject: {fileID: 3851081190275318822}
   serializedVersion: 5
   m_Mass: 1
   m_LinearDamping: 0
@@ -69,7 +69,7 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
---- !u!1 &9052436253210820973
+--- !u!1 &3982529467091289259
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -77,47 +77,47 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 7441352707652480332}
-  - component: {fileID: 7848269803484116884}
-  - component: {fileID: 3056473093266710553}
-  - component: {fileID: 2620717496538484581}
+  - component: {fileID: 3545520964171684964}
+  - component: {fileID: 4339508383354288402}
+  - component: {fileID: 1858281129859767286}
+  - component: {fileID: 8856429548368813158}
   m_Layer: 0
-  m_Name: frying_pan
-  m_TagString: Item
+  m_Name: smiley
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &7441352707652480332
+--- !u!4 &3545520964171684964
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9052436253210820973}
+  m_GameObject: {fileID: 3982529467091289259}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 3267413587718242478}
+  m_Father: {fileID: 9193131642024634610}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!33 &7848269803484116884
+--- !u!33 &4339508383354288402
 MeshFilter:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9052436253210820973}
-  m_Mesh: {fileID: -6749530754551045758, guid: ec146cd81fbf090459ce46713e58871d, type: 3}
---- !u!23 &3056473093266710553
+  m_GameObject: {fileID: 3982529467091289259}
+  m_Mesh: {fileID: 2332481779433421368, guid: a89df89efd190d849837de078bc6c4f9, type: 3}
+--- !u!23 &1858281129859767286
 MeshRenderer:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9052436253210820973}
+  m_GameObject: {fileID: 3982529467091289259}
   m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
@@ -159,13 +159,13 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!64 &2620717496538484581
-MeshCollider:
+--- !u!135 &8856429548368813158
+SphereCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9052436253210820973}
+  m_GameObject: {fileID: 3982529467091289259}
   m_Material: {fileID: 13400000, guid: 37f21d359d99e734fbe9fe66454222ae, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
@@ -177,7 +177,6 @@ MeshCollider:
   m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: -1460598551551560845, guid: 20089eff26d73624fad1083b65c0c5eb, type: 3}
+  serializedVersion: 3
+  m_Radius: 0.22570798
+  m_Center: {x: 0, y: 0.22122066, z: 0.004487343}

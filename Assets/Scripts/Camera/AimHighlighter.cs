@@ -1,207 +1,185 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Highlights the object under the crosshair (center of camera) if it has tag "Item".
-/// Network seam ready:
-///  - Only runs when IsLocal == true (set by your network code on spawn).
-///  - No Fusion dependency; just call SetIsLocal(true/false) from your NetworkBehaviour.
-/// Perf:
-///  - Raycasts on a small interval, not every frame.
-///  - Uses MaterialPropertyBlock (no material instancing).
-/// </summary>
 [DefaultExecutionOrder(50)]
 [DisallowMultipleComponent]
 public class AimHighlighter : MonoBehaviour
 {
     [Header("Authority / Control (Network Seam)")]
-    [Tooltip("Should this instance simulate locally? In Fusion, set this true for the object with Input Authority.")]
+    [Tooltip("Set true on the locally controlled player (e.g., Input Authority in Fusion).")]
     public bool isLocal = true;
-
-    /// <summary>Call this from your network spawn code: SetIsLocal(Object.HasInputAuthority)</summary>
     public void SetIsLocal(bool local) => isLocal = local;
 
     [Header("Raycast")]
-    [Tooltip("Camera used for center-screen raycast. Defaults to Camera.main at runtime.")]
+    [Tooltip("Camera used for center-screen raycast. Defaults to Camera.main.")]
     public Camera cam;
     [Tooltip("Max distance for raycast.")]
     public float maxDistance = 5f;
-    [Tooltip("Which layers should be hit by the raycast.")]
-    public LayerMask hitMask = ~0; // everything
-    [Tooltip("Only highlight objects with this tag (set on the item or a parent).")]
+    [Tooltip("Layers that can be hit.")]
+    public LayerMask hitMask = ~0;
+    [Tooltip("Only highlight objects with this tag (on item or a parent).")]
     public string requiredTag = "Item";
-    [Tooltip("Seconds between raycasts (smaller = more responsive, bigger = cheaper).")]
+    [Tooltip("Seconds between raycasts (smaller = more responsive).")]
     [Range(0.01f, 0.2f)] public float rayInterval = 0.05f;
 
     [Header("Highlight")]
-    [Tooltip("Color applied while aimed.")]
+    [Tooltip("Tint applied while aimed.")]
     public Color highlightColor = new Color(1f, 0.9f, 0.2f, 1f);
-    [Tooltip("Emission intensity (0 to disable emission entirely).")]
+    [Tooltip("Extra glow (0 disables emission).")]
     [Range(0f, 5f)] public float emissionBoost = 1.5f;
-    [Tooltip("How quickly highlight fades in/out.")]
-    [Range(0f, 30f)] public float lerpSpeed = 18f;
+    [Range(0f, 1f), Tooltip("How strong the tint is vs original base color.")]
+    public float tintStrength = 0.6f;
+    
+    // Expose current target (null if none)
+    public Transform CurrentTarget => _currentTarget;
 
-    [Header("Debug")]
-    public bool drawRay = false;
 
-    // --- internals ---
+    // internals
     private Transform _currentTarget;
     private readonly List<Renderer> _currentRenderers = new();
-    private readonly Dictionary<Renderer, MaterialPropertyBlock> _mpbCache = new();
+    private MaterialPropertyBlock _mpb;
     private float _nextRayTime;
 
-    // Shader property ids
-    private static readonly int ID_BaseColor   = Shader.PropertyToID("_BaseColor");      // URP Lit
-    private static readonly int ID_Color       = Shader.PropertyToID("_Color");          // Standard/Legacy
-    private static readonly int ID_Emission    = Shader.PropertyToID("_EmissionColor");  // URP/Standard
+    // shader ids
+    private static readonly int ID_BaseColor = Shader.PropertyToID("_BaseColor");
+    private static readonly int ID_Color     = Shader.PropertyToID("_Color");
+    private static readonly int ID_Emission  = Shader.PropertyToID("_EmissionColor");
 
     void Awake()
     {
         if (!cam) cam = Camera.main;
+        if (_mpb == null) _mpb = new MaterialPropertyBlock();
+    }
+
+    void OnEnable()
+    {
+        if (_mpb == null) _mpb = new MaterialPropertyBlock();
+    }
+
+    void OnDisable()
+    {
+        // make sure nothing stays glowing when this script is disabled/destroyed
+        ClearHighlightForList(_currentRenderers);
+        _currentRenderers.Clear();
+        _currentTarget = null;
     }
 
     void Update()
     {
-        // Network seam: only the local player should drive this (camera + highlight)
-        if (!isLocal || !cam) { FadeOutAndCleanup(); return; }
+        if (!isLocal || !cam || Cursor.lockState != CursorLockMode.Locked)
+        {
+            SetTarget(null); // ensure we clear if we lose authority/lock
+            return;
+        }
 
-        // Cheap gate: don't raycast if cursor isn't locked (e.g., in menus)
-        if (Cursor.lockState != CursorLockMode.Locked) { FadeOutAndCleanup(); return; }
-
-        // Throttled raycast
         if (Time.unscaledTime >= _nextRayTime)
         {
             _nextRayTime = Time.unscaledTime + rayInterval;
             PerformRaycast();
         }
-
-        // Smoothly apply highlight each frame
-        UpdateHighlight();
     }
 
+    // Cast a ray from the crosshair and pick the tagged ancestor
     private void PerformRaycast()
     {
-        Ray ray = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
-        if (drawRay) Debug.DrawRay(ray.origin, ray.direction * maxDistance, Color.yellow, rayInterval);
-
+        var ray = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
         if (Physics.Raycast(ray, out var hit, maxDistance, hitMask, QueryTriggerInteraction.Collide))
         {
-            // Find nearest ancestor that actually has the tag
-            Transform tagged = FindTaggedAncestor(hit.collider.transform, requiredTag);
-
-            if (tagged != null)
-            {
-                if (_currentTarget != tagged)
-                    SetTarget(tagged);
-                return;
-            }
+            var tagged = FindTaggedAncestor(hit.collider.transform, requiredTag);
+            SetTarget(tagged);
         }
-
-        // No valid hit
-        ClearTarget();
+        else
+        {
+            SetTarget(null);
+        }
     }
 
+    // Walk up until we find the first parent with the tag (nearest match)
     private static Transform FindTaggedAncestor(Transform t, string tag)
     {
-        Transform found = null;
-        while (t != null)
+        while (t)
         {
-            if (t.CompareTag(tag))
-                found = t; // remember but keep walking up
+            if (t.CompareTag(tag)) return t;
             t = t.parent;
         }
-        return found;
+        return null;
     }
 
+    // Switch target: unpaint old, then paint new
     private void SetTarget(Transform t)
     {
         if (_currentTarget == t) return;
 
-        ClearTarget();
+        // 1) unpaint previous
+        if (_currentRenderers.Count > 0)
+            ClearHighlightForList(_currentRenderers);
+
+        _currentRenderers.Clear();
         _currentTarget = t;
 
-        // Grab all renderers under this item
-        _currentRenderers.AddRange(_currentTarget.GetComponentsInChildren<Renderer>(true));
-
-        // Ensure MPB cache entries exist
-        foreach (var r in _currentRenderers)
-            if (r && !_mpbCache.ContainsKey(r))
-                _mpbCache[r] = new MaterialPropertyBlock();
-    }
-
-    private void ClearTarget()
-    {
-        if (_currentTarget == null) return;
-        _currentTarget = null; // we'll fade out in UpdateHighlight()
-    }
-
-    private void FadeOutAndCleanup()
-    {
-        // If we’re not active, still let highlight fade back to normal
-        UpdateHighlight();
-    }
-
-    private void UpdateHighlight()
-    {
-        var toRemove = new List<Renderer>();
-        float t = lerpSpeed <= 0f ? 1f : 1f - Mathf.Exp(-lerpSpeed * Time.unscaledDeltaTime);
-
-        foreach (var kv in _mpbCache)
+        // 2) cache and paint new
+        if (_currentTarget)
         {
-            var r = kv.Key;
-            if (!r) { toRemove.Add(r); continue; }
+            _currentTarget.GetComponentsInChildren(true, _currentRenderers);
+            ApplyHighlightForList(_currentRenderers);
+        }
+    }
 
-            bool shouldHighlight = _currentTarget != null && _currentRenderers.Contains(r);
-            var mpb = kv.Value;
+    // Reset each renderer to its material's original base color and no emission
+    private void ClearHighlightForList(List<Renderer> list)
+    {
+        for (int i = list.Count - 1; i >= 0; i--)
+        {
+            var r = list[i];
+            if (!r) { list.RemoveAt(i); continue; }
 
-            r.GetPropertyBlock(mpb);
+            var mat = r.sharedMaterial;
+            if (!mat) continue;
 
-            // Read current colors
-            Color baseCol = GetBaseColor(r, mpb, out int baseId);
-            Color emisCol = mpb.GetColor(ID_Emission);
+            int baseId = mat.HasProperty(ID_BaseColor) ? ID_BaseColor : ID_Color;
+            var origBase = mat.HasProperty(baseId) ? mat.GetColor(baseId) : Color.white;
 
-            // Targets
-            Color targetBase = shouldHighlight
-                ? Color.Lerp(baseCol, highlightColor, 0.65f)
-                : Color.Lerp(baseCol, Color.white,   0.65f);
+            r.GetPropertyBlock(_mpb);
+            _mpb.SetColor(baseId, origBase);
+            _mpb.SetColor(ID_Emission, Color.black);
+            r.SetPropertyBlock(_mpb);
 
-            Color targetEmis = (emissionBoost > 0f && shouldHighlight)
-                ? highlightColor * emissionBoost
-                : Color.black;
+            // turn off keyword so it doesn't glow
+            r.material.DisableKeyword("_EMISSION");
+        }
+    }
 
-            // Lerp
-            baseCol = Color.Lerp(baseCol, targetBase, t);
-            emisCol = Color.Lerp(emisCol, targetEmis, t);
+    // Apply a tinted base + optional emission
+    private void ApplyHighlightForList(List<Renderer> list)
+    {
+        for (int i = list.Count - 1; i >= 0; i--)
+        {
+            var r = list[i];
+            if (!r) { list.RemoveAt(i); continue; }
 
-            // Write back
-            mpb.SetColor(baseId, baseCol);
-            mpb.SetColor(ID_Emission, emisCol);
+            var mat = r.sharedMaterial;
+            if (!mat) continue;
 
-            // NOTE: enabling _EMISSION on r.material creates an instance.
-            // If you want zero instancing, keep emissionBoost = 0 and only tint base color.
+            int baseId = mat.HasProperty(ID_BaseColor) ? ID_BaseColor : ID_Color;
+            var origBase = mat.HasProperty(baseId) ? mat.GetColor(baseId) : Color.white;
+
+            var tinted = Color.Lerp(origBase, highlightColor, Mathf.Clamp01(tintStrength));
+
+            r.GetPropertyBlock(_mpb);
+            _mpb.SetColor(baseId, tinted);
+
             if (emissionBoost > 0f)
+            {
+                _mpb.SetColor(ID_Emission, highlightColor * emissionBoost);
                 r.material.EnableKeyword("_EMISSION");
+            }
+            else
+            {
+                _mpb.SetColor(ID_Emission, Color.black);
+                r.material.DisableKeyword("_EMISSION");
+            }
 
-            r.SetPropertyBlock(mpb);
+            r.SetPropertyBlock(_mpb);
         }
-
-        foreach (var r in toRemove) _mpbCache.Remove(r);
-
-        // Keep current renderer list tidy
-        if (_currentTarget == null && _currentRenderers.Count > 0)
-            _currentRenderers.Clear();
-    }
-
-    private static Color GetBaseColor(Renderer r, MaterialPropertyBlock mpb, out int idUsed)
-    {
-        // Prefer URP Lit
-        if (r.sharedMaterial && r.sharedMaterial.HasProperty(ID_BaseColor))
-        {
-            idUsed = ID_BaseColor;
-            return mpb.GetVector(ID_BaseColor);
-        }
-        // Fallback: Standard/Legacy
-        idUsed = ID_Color;
-        return mpb.GetVector(ID_Color);
     }
 }

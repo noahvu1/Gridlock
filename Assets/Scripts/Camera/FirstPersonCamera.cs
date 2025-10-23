@@ -1,10 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-/// <summary>
-/// First-person camera look with clean "network seams".
-/// + View bobbing (amount / frequency tunable).
-/// </summary>
 [DefaultExecutionOrder(-50)]
 [DisallowMultipleComponent]
 public class FirstPersonCamera : MonoBehaviour
@@ -13,10 +9,13 @@ public class FirstPersonCamera : MonoBehaviour
     [Tooltip("Should this instance simulate locally? In Fusion, set this true for the object with Input Authority.")]
     public bool isLocal = true;
 
-    [Tooltip("If true, read from Unity Input System locally. If false, expect external injection via InjectLook/InjectAim/InjectStrafe.")]
+    [Tooltip("If true, read from Unity Input System locally. If false, expect external injection via InjectLook/InjectAim.")]
     public bool useLocalInput = true;
 
+    // Sets whether this instance is controlled locally.
     public void SetIsLocal(bool local) => isLocal = local;
+
+    // Enables or disables reading local input.
     public void SetUseLocalInput(bool use) => useLocalInput = use;
 
     [Header("Targets")]
@@ -48,98 +47,38 @@ public class FirstPersonCamera : MonoBehaviour
     public float adsFOV = 60f;
     [Range(0f, 30f)] public float fovLerpSpeed = 12f;
 
-    [Header("Tilt (Optional)")]
-    public float maxTilt = 8f;
-    [Range(0f, 30f)] public float tiltLerpSpeed = 10f;
-    public float tiltInputScale = 1f;
+    // Injects additional look delta this frame.
+    public void InjectLook(Vector2 delta) => _lookInput += delta;
 
-    // --- View Bobbing ---
-    [Header("View Bobbing")]
-    public bool enableViewBob = true;
-    [Tooltip("How far the camera bobs at full running speed (meters).")]
-    public float bobAmount = 0.05f;              // public amount knob
-    [Tooltip("Base bob frequency (cycles per second).")]
-    public float bobFrequency = 6f;              // public frequency knob
-    [Tooltip("How strongly speed scales the bob amplitude (1 = linear).")]
-    public float bobSpeedInfluence = 1f;
-    [Tooltip("How quickly the camera blends to the bob offset.")]
-    public float bobLerpSpeed = 12f;
-    [Tooltip("Optional: read planar velocity from this body. If null, tries to find one on characterRoot/parents.")]
-    public Rigidbody velocityBody;
-    [Tooltip("Optional explicit bob target. Defaults to pitchPivot (camera).")]
-    public Transform bobTarget;
+    // Injects ADS/aim held state.
+    public void InjectAim(bool held) => _aimHeld = held;
 
-    // network seam helpers (optional)
-    public void InjectPlanarSpeed(float mps) { _injectedPlanarSpeed = Mathf.Max(0f, mps); }
-    public void InjectGrounded(bool grounded) { _injectedGrounded = grounded; _hasInjectedGrounded = true; }
-
-    // internal state
-    private float _yaw;
-    private float _pitch;
-    private float _smoothedYaw;
-    private float _smoothedPitch;
-    private float _currentTilt;
-    private Camera _cam;
-
-    // injected/collected inputs (network seam)
-    private Vector2 _lookInput;   // x = yaw, y = pitch
-    private float   _strafeInput; // for tilt
-    private bool    _aimHeld;
-
-    // bob internal
-    private Vector3 _bobRestLocalPos;
-    private float   _bobPhase;
-    private float   _injectedPlanarSpeed;
-    private bool    _injectedGrounded;
-    private bool    _hasInjectedGrounded;
-
-    public void InjectLook(Vector2 delta)  => _lookInput += delta;
-    public void InjectStrafe(float x)      => _strafeInput = Mathf.Clamp(x, -1f, 1f);
-    public void InjectAim(bool held)       => _aimHeld = held;
-
+    // Locks/unlocks and shows/hides the cursor.
     public void EnableLook(bool enabled)
     {
-        if (enabled)
-        {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-        }
-        else
-        {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-            _lookInput = Vector2.zero;
-        }
+        if (enabled) { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; }
+        else { Cursor.lockState = CursorLockMode.None; Cursor.visible = true; _lookInput = Vector2.zero; }
     }
 
+    // Sets defaults, caches components, and initializes state.
     void Awake()
     {
         if (!pitchPivot)    pitchPivot    = transform;
         if (!characterRoot) characterRoot = transform;
-        if (!bobTarget)     bobTarget     = pitchPivot;
 
         _cam = GetComponent<Camera>();
         if (_cam) _cam.fieldOfView = normalFOV;
 
-        // Initialize rotations
-        Vector3 yawEuler   = characterRoot.localEulerAngles;
-        Vector3 pitchEuler = pitchPivot.localEulerAngles;
+        var yawEuler = characterRoot.localEulerAngles;
+        var pitchEuler = pitchPivot.localEulerAngles;
         _yaw   = _smoothedYaw   = yawEuler.y;
         _pitch = _smoothedPitch = NormalizeAngle(pitchEuler.x);
-
-        // Initialize bob
-        _bobRestLocalPos = bobTarget.localPosition;
-
-        // Try to find a Rigidbody for speed sampling
-        if (!velocityBody && characterRoot)
-            velocityBody = characterRoot.GetComponentInParent<Rigidbody>();
     }
 
-    void Start()
-    {
-        if (lockCursorOnStart) EnableLook(true);
-    }
+    // Optionally locks the cursor on start.
+    void Start() { if (lockCursorOnStart) EnableLook(true); }
 
+    // Main update: input, look step, and per-frame resets.
     void Update()
     {
         if (!isLocal) return;
@@ -151,41 +90,24 @@ public class FirstPersonCamera : MonoBehaviour
             GatherLocalInput();
 
         StepLook();
-        StepBob(); // <--- view bobbing
 
         _lookInput = Vector2.zero;
-        _injectedPlanarSpeed = 0f; // consumers inject per-frame if desired
-        _hasInjectedGrounded = false;
     }
 
+    // Reads local input from mouse/gamepad.
     private void GatherLocalInput()
     {
         Vector2 look = Vector2.zero;
-
-        if (Mouse.current != null)
-            look += Mouse.current.delta.ReadValue();
-
-        if (Gamepad.current != null)
-            look += Gamepad.current.rightStick.ReadValue() * gamepadScale * Time.unscaledDeltaTime;
-
+        if (Mouse.current  != null) look += Mouse.current.delta.ReadValue();
+        if (Gamepad.current != null) look += Gamepad.current.rightStick.ReadValue() * gamepadScale * Time.unscaledDeltaTime;
         _lookInput += look;
 
-        float x = 0f;
-        if (Keyboard.current != null)
-        {
-            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) x -= 1f;
-            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) x += 1f;
-        }
-        if (Gamepad.current != null)
-            x += Gamepad.current.leftStick.ReadValue().x;
-
-        _strafeInput = Mathf.Clamp(x, -1f, 1f);
-
-        bool mouseAim = Mouse.current != null && Mouse.current.rightButton.isPressed;
+        bool mouseAim = Mouse.current  != null && Mouse.current.rightButton.isPressed;
         bool padAim   = Gamepad.current != null && Gamepad.current.leftTrigger.ReadValue() > 0.2f;
         _aimHeld = mouseAim || padAim;
     }
 
+    // Applies yaw/pitch smoothing and FOV transitions (no lean/bob).
     private void StepLook()
     {
         float inv = invertY ? 1f : -1f;
@@ -198,12 +120,7 @@ public class FirstPersonCamera : MonoBehaviour
         _smoothedPitch = Mathf.Lerp(_smoothedPitch, _pitch, t);
 
         characterRoot.localRotation = Quaternion.Euler(0f, _smoothedYaw, 0f);
-
-        float targetTilt = -_strafeInput * maxTilt * tiltInputScale;
-        float tt = tiltLerpSpeed <= 0f ? 1f : 1f - Mathf.Exp(-tiltLerpSpeed * Time.unscaledDeltaTime);
-        _currentTilt = Mathf.Lerp(_currentTilt, targetTilt, tt);
-
-        pitchPivot.localRotation = Quaternion.Euler(_smoothedPitch, 0f, _currentTilt);
+        pitchPivot.localRotation    = Quaternion.Euler(_smoothedPitch, 0f, 0f);
 
         if (_cam)
         {
@@ -213,62 +130,24 @@ public class FirstPersonCamera : MonoBehaviour
         }
     }
 
-    private void StepBob()
-    {
-        if (!enableViewBob || bobAmount <= 0f || bobFrequency <= 0f || bobTarget == null)
-        {
-            // Snap back to rest if disabled
-            if (bobTarget && bobTarget.localPosition != _bobRestLocalPos)
-            {
-                float lt = bobLerpSpeed <= 0f ? 1f : 1f - Mathf.Exp(-bobLerpSpeed * Time.deltaTime);
-                bobTarget.localPosition = Vector3.Lerp(bobTarget.localPosition, _bobRestLocalPos, lt);
-            }
-            return;
-        }
-
-        // --- Determine planar speed (m/s) and grounded state ---
-        float planarSpeed = _injectedPlanarSpeed;
-        bool grounded = _hasInjectedGrounded ? _injectedGrounded : true;
-
-        if (velocityBody)
-        {
-            Vector3 v = velocityBody.linearVelocity;
-            float rbPlanar = new Vector3(v.x, 0f, v.z).magnitude;
-            // prefer injected speed if provided (network), else use rb
-            if (planarSpeed <= 0f) planarSpeed = rbPlanar;
-            grounded = _hasInjectedGrounded ? grounded : Mathf.Abs(v.y) < 0.1f; // cheap-ish guess
-        }
-
-        // Fade bob with movement speed
-        float speed01 = Mathf.Clamp01(planarSpeed * bobSpeedInfluence);
-        float amp = bobAmount * speed01;
-
-        // Advance phase based on speed (slower when standing still)
-        float freq = bobFrequency * Mathf.Lerp(0.5f, 1.0f, speed01);
-        _bobPhase += (grounded ? 1f : 0.2f) * freq * Time.deltaTime;
-
-        // Classic head-bob: small lateral + vertical (vertical is stronger, double freq)
-        Vector3 targetOffset = Vector3.zero;
-        targetOffset.x = Mathf.Cos(_bobPhase) * amp * 0.4f;
-        targetOffset.y = Mathf.Sin(_bobPhase * 2f) * amp;
-
-        // Lerp to target offset
-        Vector3 targetPos = _bobRestLocalPos + targetOffset;
-        float t = bobLerpSpeed <= 0f ? 1f : 1f - Mathf.Exp(-bobLerpSpeed * Time.deltaTime);
-        bobTarget.localPosition = Vector3.Lerp(bobTarget.localPosition, targetPos, t);
-    }
-
-    /// <summary>Add recoil in degrees: x = pitch up (+), y = yaw right (+).</summary>
+    // Adds recoil in degrees (x=pitch up, y=yaw right).
     public void AddRecoil(Vector2 degrees)
     {
         _pitch = Mathf.Clamp(_pitch + degrees.x, minPitch, maxPitch);
         _yaw  += degrees.y;
     }
 
+    // Normalizes an angle to [-180, 180].
     private static float NormalizeAngle(float angle)
     {
         angle %= 360f;
         if (angle > 180f) angle -= 360f;
         return angle;
     }
+
+    // --- internals ---
+    private float _yaw, _pitch, _smoothedYaw, _smoothedPitch;
+    private Camera _cam;
+    private Vector2 _lookInput;
+    private bool _aimHeld;
 }
