@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.SceneManagement; // <-- needed for scene loading
+using UnityEngine.SceneManagement; 
 
 [DisallowMultipleComponent]
 public class PauseMenu : MonoBehaviour

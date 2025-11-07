@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Linq;
 
 [RequireComponent(typeof(GridLayoutGroup))]
 public class BingoBoardUI : MonoBehaviour
@@ -34,7 +35,7 @@ public class BingoBoardUI : MonoBehaviour
     [Header("Label Style")]
     public Color textColor = new Color(0.12f, 0.12f, 0.18f, 1f);
     public int minFontSize = 16;
-    public int maxFontSize = 36;
+    public int maxFontSize = 30;
 
     // References to UI components
     private GridLayoutGroup _grid;
@@ -125,6 +126,7 @@ public class BingoBoardUI : MonoBehaviour
             // Update text label in UI
             ApplyCellUI(i, nameToUse, false);
         }
+        ApplyUniformFontSize();   // make all labels the same size
     }
 
     /// <summary>
@@ -202,13 +204,16 @@ public class BingoBoardUI : MonoBehaviour
         lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
         lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
 
+// in CreateCell(), replace the label setup with this:
         var text = labelGO.GetComponent<Text>();
         text.text = "";
         text.color = textColor;
         text.alignment = TextAnchor.MiddleCenter;
-        text.resizeTextForBestFit = true;
-        text.resizeTextMinSize = minFontSize;
-        text.resizeTextMaxSize = maxFontSize;
+        text.resizeTextForBestFit = false;           // keep one size for all
+        text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        text.verticalOverflow = VerticalWrapMode.Truncate;
+        text.fontSize = maxFontSize;                 // will be set uniformly later
+
 
         // Checkmark overlay (starts hidden)
         var checkGO = new GameObject("Checkmark", typeof(RectTransform), typeof(Image));
@@ -264,4 +269,55 @@ public class BingoBoardUI : MonoBehaviour
             (list[i], list[j]) = (list[j], list[i]);
         }
     }
+    // put this new helper method anywhere in the class
+    void ApplyUniformFontSize()
+    {
+        // get all label Texts
+        List<Text> labels = new List<Text>();
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            var t = transform.GetChild(i).Find("Label")?.GetComponent<Text>();
+            if (t) labels.Add(t);
+        }
+
+        // binary search a single size that fits every label's rect
+        int lo = minFontSize;
+        int hi = maxFontSize;
+        int best = lo;
+
+        while (lo <= hi)
+        {
+            int mid = (lo + hi) / 2;
+            bool fitsAll = true;
+
+            for (int i = 0; i < labels.Count; i++)
+            {
+                var t = labels[i];
+                t.fontSize = mid; // test this size
+
+                var rect = (RectTransform)t.transform;
+                var genSettings = t.GetGenerationSettings(rect.rect.size);
+
+                // preferred size for this text at 'mid'
+                float prefW = t.cachedTextGeneratorForLayout
+                    .GetPreferredWidth(t.text, genSettings) / t.pixelsPerUnit;
+                float prefH = t.cachedTextGeneratorForLayout
+                    .GetPreferredHeight(t.text, genSettings) / t.pixelsPerUnit;
+
+                // small padding so it doesn't touch borders
+                float pad = 2f;
+                if (prefW > rect.rect.width - pad || prefH > rect.rect.height - pad)
+                {
+                    fitsAll = false;
+                    break;
+                }
+            }
+
+            if (fitsAll) { best = mid; lo = mid + 1; } else { hi = mid - 1; }
+        }
+
+        // apply the final uniform size
+        for (int i = 0; i < labels.Count; i++) labels[i].fontSize = best;
+    }
+
 }
