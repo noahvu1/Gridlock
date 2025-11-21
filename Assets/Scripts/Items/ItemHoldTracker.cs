@@ -6,16 +6,16 @@ using UnityEngine.UI;
 public class ItemHoldTracker : MonoBehaviour
 {
     [Header("Refs")]
-    public ItemHolder holder;
-    public BingoBoardUI bingoBoard;
+    public ItemHolder holder;            // must expose CurrentHeld
+    public BingoBoardUI bingoBoard;      // to mark found on the board
 
     [Header("Timing")]
     public float requiredHoldSeconds = 10f;
 
     [Header("HUD Progress Bar")]
-    public RectTransform holdBarRect;   // drag your bar's RectTransform
-    public GameObject holdBarRoot;      // optional parent for show/hide
-    public bool countDown = true;       // if true, bar shrinks down over time
+    public RectTransform holdBarRect;    // drag your bar's RectTransform
+    public GameObject holdBarRoot;       // optional parent for show/hide
+    public bool countDown = true;        // if true, bar shrinks down over time
 
     [Header("Visuals")]
     public Color completedTextColor = Color.green;
@@ -27,13 +27,14 @@ public class ItemHoldTracker : MonoBehaviour
 
     void Reset()
     {
+        // quick auto-refs
         holder = GetComponent<ItemHolder>();
         if (!bingoBoard) bingoBoard = FindObjectOfType<BingoBoardUI>();
     }
 
     void Start()
     {
-        // get the starting full width
+        // cache starting width
         if (holdBarRect)
         {
             fullWidth = holdBarRect.rect.width > 0 ? holdBarRect.rect.width :
@@ -51,7 +52,7 @@ public class ItemHoldTracker : MonoBehaviour
     {
         if (!holder) return;
 
-        // detect item change
+        // detect change in held item
         if (holder.CurrentHeld != current)
         {
             current = holder.CurrentHeld;
@@ -59,11 +60,17 @@ public class ItemHoldTracker : MonoBehaviour
             SetBarVisible(current != null);
             ResetBar();
 
-            // optional: position the bar near bottom-center
+            // pin bar bottom-center
             if (holdBarRect)
             {
                 holdBarRect.anchorMin = holdBarRect.anchorMax = new Vector2(0.5f, 0.1f);
                 holdBarRect.anchoredPosition = Vector2.zero;
+            }
+
+            // announcement on pickup
+            if (current)
+            {
+                AnnouncementsManager.Instance?.Announce($"{NormalizeName(current.name)} picked up.");
             }
         }
 
@@ -73,11 +80,11 @@ public class ItemHoldTracker : MonoBehaviour
         timer += Time.deltaTime;
         float progress = Mathf.Clamp01(timer / Mathf.Max(0.0001f, requiredHoldSeconds));
 
-        // shrink or grow the width
+        // update width
         float ratio = countDown ? (1f - progress) : progress;
         SetBar(ratio);
 
-        // finished holding
+        // claim when full
         if (timer >= requiredHoldSeconds)
         {
             string itemName = NormalizeName(current.name);
@@ -89,6 +96,8 @@ public class ItemHoldTracker : MonoBehaviour
             holder.Drop();
             if (toDestroy) Destroy(toDestroy.gameObject);
 
+            AnnouncementsManager.Instance?.Announce($"{itemName} has been claimed!");
+
             current = null;
             timer = 0f;
             SetBarVisible(false);
@@ -98,6 +107,7 @@ public class ItemHoldTracker : MonoBehaviour
 
     void ResetBar()
     {
+        // set bar back to full width
         if (!holdBarRect) return;
 
         if (fullWidth <= 0f)
@@ -109,6 +119,7 @@ public class ItemHoldTracker : MonoBehaviour
 
     void SetBar(float ratio)
     {
+        // resize bar by ratio 0..1
         if (!holdBarRect) return;
         float width = fullWidth * Mathf.Clamp01(ratio);
         holdBarRect.sizeDelta = new Vector2(width, holdBarRect.sizeDelta.y);
@@ -116,14 +127,13 @@ public class ItemHoldTracker : MonoBehaviour
 
     void SetBarVisible(bool visible)
     {
+        // show/hide bar object
         if (!holdBarRect) return;
 
         if (visible)
         {
-            // bring to front
             holdBarRect.SetAsLastSibling();
 
-            // force visible (not faded or transparent)
             var cg = holdBarRect.GetComponentInParent<CanvasGroup>();
             if (cg) cg.alpha = 1f;
 
@@ -142,13 +152,15 @@ public class ItemHoldTracker : MonoBehaviour
 
     static string NormalizeName(string n)
     {
+        // turn "frying_pan (Clone)" into "frying pan"
         if (string.IsNullOrEmpty(n)) return n;
         n = n.Replace("(Clone)", "").Trim();
-        return n.ToLowerInvariant();
+        return n.Replace('_', ' ').ToLowerInvariant();
     }
 
     static void TintBoardLabelText(BingoBoardUI board, string itemName, Color c)
     {
+        // color the label that matches itemName
         if (!board || string.IsNullOrEmpty(itemName)) return;
 
         var root = board.transform;

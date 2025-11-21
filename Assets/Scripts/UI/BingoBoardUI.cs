@@ -319,5 +319,29 @@ public class BingoBoardUI : MonoBehaviour
         // apply the final uniform size
         for (int i = 0; i < labels.Count; i++) labels[i].fontSize = best;
     }
+    
+    // returns true if the cell is effectively complete (center counts as completed)
+    public bool IsCellCompleted(int row, int col)
+    {
+        if (_boardItems == null || _completed == null) return false;
+        int i = Index(row, col);
+        if (!ValidIndex(i)) return false;
+
+        // center is free/blank; treat as completed for line checks
+        if (_boardItems[i] == null) return true;
+
+        return _completed[i];
+    }
+
+// get the RectTransform of a given cell (for drawing the line)
+    public RectTransform GetCellRect(int row, int col)
+    {
+        int i = Index(row, col);
+        if (!ValidIndex(i)) return null;
+        return transform.GetChild(i) as RectTransform;
+    }
+
+// convenience to expose the board RectTransform
+    public RectTransform GetBoardRect() => _rt;
 
 }

@@ -8,9 +8,22 @@ public class PlayerHealthUI : MonoBehaviour
     [Min(1)] public int maxHealth = 100;
     [SerializeField] private int currentHealth = 100;
 
+    [Header("Regen")]
+    public bool useRegen = true;          // toggle regen
+    public float regenPerSecond = 5f;     // 5 HP/sec
+    public float regenStartDelay = 1.5f;  // wait after taking damage
+    float _regenBlockedUntil;             // time when regen can start
+
     [Header("UI")]
-    public Image healthFillImage;     // green fill image
-    public Image healthBackground;    // optional background
+    public Image healthFillImage;         // set Image.Type=Filled, Method=Horizontal
+    public Image healthBackground;        // optional
+
+    [Header("Colors")]
+    [Range(0f,1f)] public float lowThreshold = 0.5f;     // <=50% goes yellow
+    [Range(0f,1f)] public float criticalThreshold = 0.2f;// <=20% goes red
+    public Color healthyColor = new Color(0.2f, 0.85f, 0.2f);  // green
+    public Color lowColor = new Color(1f, 0.9f, 0.2f);         // yellow
+    public Color criticalColor = new Color(1f, 0.25f, 0.25f);  // red
 
     void Awake()
     {
@@ -18,16 +31,31 @@ public class PlayerHealthUI : MonoBehaviour
         RefreshUI();
     }
 
+    void Update()
+    {
+        // regen
+        if (useRegen && !IsDead() && Time.time >= _regenBlockedUntil && currentHealth < maxHealth)
+        {
+            float add = regenPerSecond * Time.deltaTime;
+            if (add > 0f)
+            {
+                currentHealth = Mathf.Min(maxHealth, Mathf.RoundToInt(currentHealth + add));
+                RefreshUI();
+            }
+        }
+    }
+
     public void TakeDamage(int amount)
     {
-        if (amount <= 0) return;
+        if (amount <= 0 || IsDead()) return;
         currentHealth = Mathf.Max(0, currentHealth - amount);
+        _regenBlockedUntil = Time.time + regenStartDelay; // pause regen after damage
         RefreshUI();
     }
 
     public void Heal(int amount)
     {
-        if (amount <= 0) return;
+        if (amount <= 0 || IsDead()) return;
         currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
         RefreshUI();
     }
@@ -43,7 +71,12 @@ public class PlayerHealthUI : MonoBehaviour
         if (healthFillImage)
         {
             float t = maxHealth > 0 ? (float)currentHealth / maxHealth : 0f;
-            healthFillImage.fillAmount = t; // expects Image Type = Filled, Fill Method = Horizontal
+            healthFillImage.fillAmount = t;
+
+            // color swap based on thresholds
+            if (t <= criticalThreshold) healthFillImage.color = criticalColor;
+            else if (t <= lowThreshold) healthFillImage.color = lowColor;
+            else healthFillImage.color = healthyColor;
         }
     }
 
@@ -55,7 +88,13 @@ public class PlayerHealthUI : MonoBehaviour
     {
         currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
         if (healthFillImage && maxHealth > 0)
-            healthFillImage.fillAmount = (float)currentHealth / maxHealth;
+        {
+            float t = (float)currentHealth / maxHealth;
+            healthFillImage.fillAmount = t;
+            if (t <= criticalThreshold) healthFillImage.color = criticalColor;
+            else if (t <= lowThreshold) healthFillImage.color = lowColor;
+            else healthFillImage.color = healthyColor;
+        }
     }
 #endif
 }
