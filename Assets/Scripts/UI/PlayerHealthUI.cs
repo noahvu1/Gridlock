@@ -9,21 +9,25 @@ public class PlayerHealthUI : MonoBehaviour
     [SerializeField] private int currentHealth = 100;
 
     [Header("Regen")]
-    public bool useRegen = true;          // toggle regen
-    public float regenPerSecond = 5f;     // 5 HP/sec
-    public float regenStartDelay = 1.5f;  // wait after taking damage
-    float _regenBlockedUntil;             // time when regen can start
+    public bool useRegen = true;
+    public float regenPerSecond = 5f;
+    public float regenStartDelay = 1.5f;
+    float _regenBlockedUntil;
 
     [Header("UI")]
-    public Image healthFillImage;         // set Image.Type=Filled, Method=Horizontal
-    public Image healthBackground;        // optional
+    public Image healthFillImage;
+    public Image healthBackground;
 
     [Header("Colors")]
-    [Range(0f,1f)] public float lowThreshold = 0.5f;     // <=50% goes yellow
-    [Range(0f,1f)] public float criticalThreshold = 0.2f;// <=20% goes red
-    public Color healthyColor = new Color(0.2f, 0.85f, 0.2f);  // green
-    public Color lowColor = new Color(1f, 0.9f, 0.2f);         // yellow
-    public Color criticalColor = new Color(1f, 0.25f, 0.25f);  // red
+    [Range(0f,1f)] public float lowThreshold = 0.5f;
+    [Range(0f,1f)] public float criticalThreshold = 0.2f;
+    public Color healthyColor = new Color(0.2f, 0.85f, 0.2f);
+    public Color lowColor = new Color(1f, 0.9f, 0.2f);
+    public Color criticalColor = new Color(1f, 0.25f, 0.25f);
+
+    [Header("Damage Sound")]
+    public AudioClip damageSound;          // drag your sound here
+    public AudioSource cameraAudioSource;  // drag your main camera here
 
     void Awake()
     {
@@ -48,8 +52,16 @@ public class PlayerHealthUI : MonoBehaviour
     public void TakeDamage(int amount)
     {
         if (amount <= 0 || IsDead()) return;
+
         currentHealth = Mathf.Max(0, currentHealth - amount);
-        _regenBlockedUntil = Time.time + regenStartDelay; // pause regen after damage
+
+        // pause regen after damage
+        _regenBlockedUntil = Time.time + regenStartDelay;
+
+        // --- NEW: play damage sfx ---
+        if (cameraAudioSource && damageSound)
+            cameraAudioSource.PlayOneShot(damageSound);
+
         RefreshUI();
     }
 
@@ -73,7 +85,6 @@ public class PlayerHealthUI : MonoBehaviour
             float t = maxHealth > 0 ? (float)currentHealth / maxHealth : 0f;
             healthFillImage.fillAmount = t;
 
-            // color swap based on thresholds
             if (t <= criticalThreshold) healthFillImage.color = criticalColor;
             else if (t <= lowThreshold) healthFillImage.color = lowColor;
             else healthFillImage.color = healthyColor;

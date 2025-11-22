@@ -29,6 +29,10 @@ public class BingoWinEffects : MonoBehaviour
     [Header("Slow Motion")]
     [Range(0.01f, 1f)] public float slowScale = 0.15f;
 
+    [Header("Cursor on Win")]
+    public bool showCursorOnWin = true;
+    public CursorLockMode lockModeOnWin = CursorLockMode.None;
+
     [Header("Cheat")]
     public Key cheatKeyFallback = Key.P;
     public int cheatColumn = 0;
@@ -165,10 +169,19 @@ public class BingoWinEffects : MonoBehaviour
         _won = true;
         if (bingoPanel) bingoPanel.SetActive(true);
 
+        // slow motion
         Time.timeScale = slowScale;
         Time.fixedDeltaTime = 0.02f * slowScale;
 
+        // play SFX
         if (sfxSource && winnerSound) sfxSource.PlayOneShot(winnerSound);
+
+        // show mouse cursor for menus
+        if (showCursorOnWin)
+        {
+            Cursor.lockState = lockModeOnWin;  // usually None
+            Cursor.visible = true;
+        }
 
         StartCoroutine(ShakeAndEnd(cells));
     }
